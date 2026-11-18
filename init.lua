@@ -184,7 +184,11 @@ vim.diagnostic.config {
   virtual_lines = false, -- Teest shows up underneath the line, with virtual lines
 
   -- Auto open the float, so you can easily read the errors when jumping with `[d` and `]d`
-  jump = { float = true },
+  jump = {
+    on_jump = function(_, bufnr)
+      vim.diagnostic.open_float { bufnr = bufnr, scope = 'cursor', focus = false }
+    end,
+  },
 }
 
 vim.keymap.set('n', '<leader>q', vim.diagnostic.setloclist, { desc = 'Open diagnostic [Q]uickfix list' })
@@ -603,6 +607,17 @@ require('lazy').setup({
         --
         -- But for many setups, the LSP (`ts_ls`) will work just fine
         -- ts_ls = {},
+        pyright = {
+          -- Projekt-lokale .venv (z.B. von `uv sync`) automatisch als Interpreter verwenden
+          before_init = function(_, config)
+            if not config.root_dir then return end
+            local venv_python = config.root_dir .. '/.venv/bin/python'
+            if vim.uv.fs_stat(venv_python) then
+              config.settings = config.settings or {}
+              config.settings.python = vim.tbl_deep_extend('force', config.settings.python or {}, { pythonPath = venv_python })
+            end
+          end,
+        },
       }
 
       -- Ensure the servers and tools above are installed
