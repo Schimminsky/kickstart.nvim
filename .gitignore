@@ -5,8 +5,6 @@ nvim
 
 spell/
 
-# You can uncomment this yourself if you want to lock the lazy-lock.json,
-# but for kickstart, it makes sense to leave it ignored.
-lazy-lock.json
+# lazy-lock.json wird versioniert, damit alle Rechner dieselben Plugin-Versionen nutzen
 
 .DS_Store
