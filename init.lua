@@ -355,6 +355,7 @@ require('lazy').setup({
         { '<leader>o', group = '[O]bsidian' },
         { '<leader>a', group = '[A]I (Claude Code)', mode = { 'n', 'v' } },
         { '<leader>p', group = '[P]roject Session' },
+        { '<leader>j', group = '[J]ava', mode = { 'n', 'v' } },
       },
     },
   },
@@ -658,7 +659,6 @@ require('lazy').setup({
         },
         bashls = {},
         clojure_lsp = {},
-        jdtls = {},
         texlab = {},
       }
 
@@ -675,7 +675,9 @@ require('lazy').setup({
         'pyright',
         'bash-language-server',
         'clojure-lsp',
-        'jdtls',
+        'jdtls', -- wird von nvim-jdtls gestartet (custom/plugins/jdtls.lua), nicht über `servers`
+        'java-debug-adapter',
+        'java-test',
         'texlab',
         -- Formatter und Linter (nur chktex kommt vom System, Arch: texlive-binextra)
         'ruff',
