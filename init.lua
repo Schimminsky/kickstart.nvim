@@ -356,6 +356,7 @@ require('lazy').setup({
         { '<leader>a', group = '[A]I (Claude Code)', mode = { 'n', 'v' } },
         { '<leader>p', group = '[P]roject Session' },
         { '<leader>j', group = '[J]ava', mode = { 'n', 'v' } },
+        { '<leader>n', group = '[N]eotest (Tests)' },
       },
     },
   },
@@ -930,11 +931,18 @@ require('lazy').setup({
   { -- Highlight, edit, and navigate code
     'nvim-treesitter/nvim-treesitter',
     config = function()
-      local filetypes = { 'bash', 'c', 'diff', 'html', 'lua', 'luadoc', 'markdown', 'markdown_inline', 'query', 'vim', 'vimdoc' }
-      require('nvim-treesitter').install(filetypes)
+      local parsers = {
+        'bash', 'c', 'diff', 'html', 'lua', 'luadoc', 'markdown', 'markdown_inline', 'query', 'vim', 'vimdoc',
+        -- Eigene Sprachen; neotest und aerial brauchen die Parser für Python und Java
+        'python', 'java', 'go', 'clojure', 'latex', 'bibtex', 'json', 'yaml', 'toml', 'gitcommit', 'git_rebase', 'dockerfile', 'hcl', 'terraform',
+      }
+      require('nvim-treesitter').install(parsers)
+      -- Parser-Namen sind nicht immer gleich Dateityp (tex -> latex, sh -> bash), daher über get_lang auflösen
       vim.api.nvim_create_autocmd('FileType', {
-        pattern = filetypes,
-        callback = function() vim.treesitter.start() end,
+        callback = function(args)
+          local lang = vim.treesitter.language.get_lang(args.match)
+          if lang and vim.list_contains(parsers, lang) and vim.treesitter.language.add(lang) then vim.treesitter.start(args.buf, lang) end
+        end,
       })
     end,
   },
