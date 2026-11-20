@@ -91,7 +91,7 @@ vim.g.mapleader = ' '
 vim.g.maplocalleader = ' '
 
 -- Set to true if you have a Nerd Font installed and selected in the terminal
-vim.g.have_nerd_font = false
+vim.g.have_nerd_font = true
 
 -- [[ Setting options ]]
 -- See `:help vim.o`
@@ -100,9 +100,14 @@ vim.g.have_nerd_font = false
 
 -- Make line numbers default
 vim.o.number = true
--- You can also add relative line numbers, to help with jumping.
---  Experiment for yourself to see if you like it!
--- vim.o.relativenumber = true
+-- Relative line numbers, to help with jumping (5j, 12k, ...)
+vim.o.relativenumber = true
+
+-- Einrückung: 4 Leerzeichen statt Tab-Zeichen (guess-indent überschreibt das pro Datei, wenn es eine andere Einrückung erkennt)
+vim.o.expandtab = true
+vim.o.tabstop = 4
+vim.o.shiftwidth = 4
+vim.o.softtabstop = 4
 
 -- Enable mouse mode, can be useful for resizing splits for example!
 vim.o.mouse = 'a'
@@ -164,12 +169,41 @@ vim.o.scrolloff = 10
 -- See `:help 'confirm'`
 vim.o.confirm = true
 
+-- Deutsches Tastaturlayout: ü/+ liefern [ und ], Ü/* liefern { und } (nur Normal/Visual/Operator-Modus, Insert bleibt unberührt)
+--  See `:help 'langmap'`
+vim.o.langmap = 'ü[,+],Ü{,*}'
+
 -- [[ Basic Keymaps ]]
 --  See `:help vim.keymap.set()`
 
 -- Clear highlights on search when pressing <Esc> in normal mode
 --  See `:help hlsearch`
 vim.keymap.set('n', '<Esc>', '<cmd>nohlsearch<CR>')
+
+-- Neo-tree öffnen (Ersatz für `\`, das auf dem deutschen Layout schwer erreichbar ist)
+vim.keymap.set('n', '<leader>e', '<cmd>Neotree reveal toggle<CR>', { desc = 'File [E]xplorer (Neo-tree)' })
+
+-- Terminal unten ein-/ausblenden; die Shell-Sitzung läuft im Hintergrund weiter
+--  Im Terminal-Modus erst mit <Esc><Esc> in den Normal-Modus, dann <leader>tt zum Ausblenden
+local term = { buf = nil, win = nil }
+local function toggle_terminal()
+  if term.win and vim.api.nvim_win_is_valid(term.win) then
+    vim.api.nvim_win_hide(term.win)
+    term.win = nil
+    return
+  end
+  vim.cmd 'botright 15split'
+  -- jobwait() liefert -1, solange die Shell noch läuft
+  if term.buf and vim.api.nvim_buf_is_valid(term.buf) and vim.fn.jobwait({ vim.bo[term.buf].channel }, 0)[1] == -1 then
+    vim.api.nvim_win_set_buf(0, term.buf)
+  else
+    vim.cmd.terminal()
+    term.buf = vim.api.nvim_get_current_buf()
+  end
+  term.win = vim.api.nvim_get_current_win()
+  vim.cmd.startinsert()
+end
+vim.keymap.set('n', '<leader>tt', toggle_terminal, { desc = '[T]oggle [T]erminal' })
 
 -- Diagnostic Config & Keymaps
 -- See :help vim.diagnostic.Opts
@@ -202,10 +236,10 @@ vim.keymap.set('n', '<leader>q', vim.diagnostic.setloclist, { desc = 'Open diagn
 vim.keymap.set('t', '<Esc><Esc>', '<C-\\><C-n>', { desc = 'Exit terminal mode' })
 
 -- TIP: Disable arrow keys in normal mode
--- vim.keymap.set('n', '<left>', '<cmd>echo "Use h to move!!"<CR>')
--- vim.keymap.set('n', '<right>', '<cmd>echo "Use l to move!!"<CR>')
--- vim.keymap.set('n', '<up>', '<cmd>echo "Use k to move!!"<CR>')
--- vim.keymap.set('n', '<down>', '<cmd>echo "Use j to move!!"<CR>')
+vim.keymap.set('n', '<left>', '<cmd>echo "Use h to move!!"<CR>')
+vim.keymap.set('n', '<right>', '<cmd>echo "Use l to move!!"<CR>')
+vim.keymap.set('n', '<up>', '<cmd>echo "Use k to move!!"<CR>')
+vim.keymap.set('n', '<down>', '<cmd>echo "Use j to move!!"<CR>')
 
 -- Keybinds to make split navigation easier.
 --  Use CTRL+<hjkl> to switch between windows
@@ -317,6 +351,9 @@ require('lazy').setup({
         { '<leader>s', group = '[S]earch', mode = { 'n', 'v' } },
         { '<leader>t', group = '[T]oggle' },
         { '<leader>h', group = 'Git [H]unk', mode = { 'n', 'v' } },
+        { '<leader>g', group = '[G]it' },
+        { '<leader>o', group = '[O]bsidian' },
+        { '<leader>a', group = '[A]I (Claude Code)', mode = { 'n', 'v' } },
       },
     },
   },
@@ -618,6 +655,10 @@ require('lazy').setup({
             end
           end,
         },
+        bashls = {},
+        clojure_lsp = {},
+        jdtls = {},
+        texlab = {},
       }
 
       -- Ensure the servers and tools above are installed
@@ -627,7 +668,22 @@ require('lazy').setup({
       --    :Mason
       --
       -- You can press `g?` for help in this menu.
-      local ensure_installed = vim.tbl_keys(servers or {})
+      -- NOTE: Mason-Paketnamen weichen von den lspconfig-Namen in `servers` ab
+      --  (bashls -> bash-language-server, clojure_lsp -> clojure-lsp), daher explizit statt vim.tbl_keys(servers).
+      local ensure_installed = {
+        'pyright',
+        'bash-language-server',
+        'clojure-lsp',
+        'jdtls',
+        'texlab',
+        -- Formatter und Linter (nur chktex kommt vom System, Arch: texlive-binextra)
+        'ruff',
+        'shfmt',
+        'google-java-format',
+        'clj-kondo',
+        'cljfmt',
+        'latexindent',
+      }
       vim.list_extend(ensure_installed, {
         'lua-language-server', -- Lua Language server
         'stylua', -- Used to format Lua code
@@ -689,7 +745,8 @@ require('lazy').setup({
         -- Disable "format_on_save lsp_fallback" for languages that don't
         -- have a well standardized coding style. You can add additional
         -- languages here or re-enable it for the disabled ones.
-        local disable_filetypes = { c = true, cpp = true }
+        --  Markdown und LaTeX: Format-on-save aus, da Absätze umbrochen würden (`<leader>f` formatiert weiterhin manuell).
+        local disable_filetypes = { c = true, cpp = true, markdown = true, tex = true }
         if disable_filetypes[vim.bo[bufnr].filetype] then
           return nil
         else
@@ -701,6 +758,11 @@ require('lazy').setup({
       end,
       formatters_by_ft = {
         lua = { 'stylua' },
+        python = { 'ruff_organize_imports', 'ruff_format' },
+        sh = { 'shfmt' },
+        clojure = { 'cljfmt' },
+        java = { 'google-java-format' },
+        tex = { 'latexindent' },
         -- Conform can also run multiple formatters sequentially
         -- python = { "isort", "black" },
         --
@@ -730,12 +792,10 @@ require('lazy').setup({
           -- `friendly-snippets` contains a variety of premade snippets.
           --    See the README about individual language/framework/plugin snippets:
           --    https://github.com/rafamadriz/friendly-snippets
-          -- {
-          --   'rafamadriz/friendly-snippets',
-          --   config = function()
-          --     require('luasnip.loaders.from_vscode').lazy_load()
-          --   end,
-          -- },
+          {
+            'rafamadriz/friendly-snippets',
+            config = function() require('luasnip.loaders.from_vscode').lazy_load() end,
+          },
         },
         opts = {},
       },
@@ -885,24 +945,30 @@ require('lazy').setup({
   --  Here are some example plugins that I've included in the Kickstart repository.
   --  Uncomment any of the lines below to enable them (you will need to restart nvim).
   --
-  -- require 'kickstart.plugins.debug',
+  require 'kickstart.plugins.debug',
   -- require 'kickstart.plugins.indent_line',
-  -- require 'kickstart.plugins.lint',
+  require 'kickstart.plugins.lint',
   -- require 'kickstart.plugins.autopairs',
-  -- require 'kickstart.plugins.neo-tree',
-  -- require 'kickstart.plugins.gitsigns', -- adds gitsigns recommend keymaps
+  require 'kickstart.plugins.neo-tree',
+  require 'kickstart.plugins.gitsigns', -- adds gitsigns recommend keymaps
 
   -- NOTE: The import below can automatically add your own plugins, configuration, etc from `lua/custom/plugins/*.lua`
   --    This is the easiest way to modularize your config.
   --
   --  Uncomment the following line and add your plugins to `lua/custom/plugins/*.lua` to get going.
-  -- { import = 'custom.plugins' },
+  { import = 'custom.plugins' },
   --
   -- For additional information with loading, sourcing and examples see `:help lazy.nvim-🔌-plugin-spec`
   -- Or use telescope!
   -- In normal mode type `<space>sh` then write `lazy.nvim-plugin`
   -- you can continue same window with `<space>sr` which resumes last telescope search
 }, {
+  performance = {
+    rtp = {
+      -- lazy.nvim resets the rtp; keep the distro's bundled treesitter parsers (lua, vim, c, ...)
+      paths = { '/usr/lib/x86_64-linux-gnu/nvim' },
+    },
+  },
   ui = {
     -- If you are using a Nerd Font: set icons to an empty table which will use the
     -- default lazy.nvim defined Nerd Font icons, otherwise define a unicode icons table
