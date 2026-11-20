@@ -914,8 +914,58 @@ require('lazy').setup({
       --  You could remove this setup call if you don't like it,
       --  and try some other statusline plugin
       local statusline = require 'mini.statusline'
-      -- set use_icons to true if you have a Nerd Font
-      statusline.setup { use_icons = vim.g.have_nerd_font }
+
+      -- Eigene Section: läuft gerade eine Macro-Aufnahme? Wegen `showmode = false` zeigt Neovim
+      -- „recording @q“ sonst nirgends an.
+      local function section_macro()
+        local reg = vim.fn.reg_recording()
+        return reg ~= '' and ('@' .. reg) or ''
+      end
+
+      -- Eigene Section: Namen der LSP-Server (lua_ls, pyright, jdtls …) statt nur eines Symbols
+      local function section_lsp_names(args)
+        if statusline.is_truncated(args.trunc_width) then return '' end
+        local names = vim.tbl_map(function(c) return c.name end, vim.lsp.get_clients { bufnr = 0 })
+        if #names == 0 then return '' end
+        return (vim.g.have_nerd_font and '󰰎 ' or 'LSP ') .. table.concat(names, ', ')
+      end
+
+      statusline.setup {
+        use_icons = vim.g.have_nerd_font,
+        -- Aufbau wie minis Standard (H.default_content_active), nur LSP-Namen und Macro-Anzeige ergänzt
+        content = {
+          active = function()
+            local mode, mode_hl = statusline.section_mode { trunc_width = 120 }
+            local git = statusline.section_git { trunc_width = 40 }
+            local diff = statusline.section_diff { trunc_width = 75 }
+            local diagnostics = statusline.section_diagnostics { trunc_width = 75 }
+            local lsp = section_lsp_names { trunc_width = 75 }
+            local filename = statusline.section_filename { trunc_width = 140 }
+            local fileinfo = statusline.section_fileinfo { trunc_width = 120 }
+            local location = statusline.section_location { trunc_width = 75 }
+            local search = statusline.section_searchcount { trunc_width = 75 }
+
+            return statusline.combine_groups {
+              { hl = mode_hl, strings = { mode } },
+              -- Rot hinterlegt, damit eine laufende Aufnahme auffällt
+              { hl = 'MiniStatuslineModeReplace', strings = { section_macro() } },
+              { hl = 'MiniStatuslineDevinfo', strings = { git, diff, diagnostics, lsp } },
+              '%<', -- ab hier wird bei schmalen Fenstern abgeschnitten
+              { hl = 'MiniStatuslineFilename', strings = { filename } },
+              '%=', -- Rest rechtsbündig
+              { hl = 'MiniStatuslineFileinfo', strings = { fileinfo } },
+              { hl = mode_hl, strings = { search, location } },
+            }
+          end,
+        },
+      }
+
+      -- Statusline beim Start/Ende einer Aufnahme sofort neu zeichnen (sonst erst bei der nächsten Bewegung).
+      -- Bei RecordingLeave liefert reg_recording() noch das Register, daher erst danach per schedule.
+      vim.api.nvim_create_autocmd({ 'RecordingEnter', 'RecordingLeave' }, {
+        group = vim.api.nvim_create_augroup('statusline-macro', { clear = true }),
+        callback = function() vim.schedule(function() vim.cmd.redrawstatus() end) end,
+      })
 
       -- You can configure sections in the statusline by overriding their
       -- default behavior. For example, here we set the section for
